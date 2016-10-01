@@ -1,0 +1,32 @@
+before_script:
+  # update the CI runner package that determines build orders and such
+  - echo "Updating CI tool"
+  
+# the first pass examines the difference in the repo from the given two commits
+determine_builds:
+  script:
+    - if [[ ! -z "$BUILD_RECIPE" ]]; then exit 0; fi
+    # START_COMMIT defaults to HEAD~1 if not provided
+    - if [[ -z "$START_COMMIT" ]]; then START_COMMIT=master@{1}; fi
+    # STOP_COMMIT defaults to HEAD if not provided.
+    - if [[ -z "$STOP_COMMIT" ]]; then STOP_COMMIT=master; fi
+    #     STOP_COMMIT is the state of the repo when recipes are built.
+    # diff from START_COMMIT to STOP_COMMIT
+    # Loop: for each top-level recipe, post build trigger.  If any recipes
+    #    depend on earlier ones, pass them in a variable to be triggered after 
+    #    earlier builds.
+    - curl --request POST --form token=8f712b8f077a25ebb64b38b1b4ffdf --form ref=$STOP_COMMIT http://smalls.corp.continuum.io/api/v3/projects/2/trigger/builds --form "variables[BUILD_RECIPE]=frank"
+
+# this CI script is called once by each worker for each recipe.  The variable
+#    that it is called with changes, and those calls are done with the
+#    determine_builds target.
+build_recipe:
+  script:
+    # Replace this with a script.  gitlab does not recognize multliline input.
+    # https://gitlab.com/gitlab-org/gitlab-ci-multi-runner/issues/166
+    - if [[ ! -z "$BUILD_RECIPE" ]]; then echo $BUILD_RECIPE; fi
+        # conda build $BUILD_RECIPE
+        # run diagnostic test
+        # copy built package to desired output repo
+        # trigger dependent packages
+  
