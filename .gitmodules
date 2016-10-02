@@ -1,3 +1,21 @@
 [submodule "zlib"]
 	path = zlib
 	url = git@github.com:conda-forge/zlib-feedstock
+[submodule "libpng"]
+	path = libpng
+	url = git@github.com:conda-forge/libpng-feedstock
+[submodule "libtool"]
+	path = libtool
+	url = git@github.com:conda-forge/libtool-feedstock
+[submodule "automake"]
+	path = automake
+	url = git@github.com:conda-forge/automake-feedstock
+[submodule "perl"]
+	path = perl
+	url = git@github.com:conda-forge/perl-feedstock
+[submodule "autoconf"]
+	path = autoconf
+	url = git@github.com:conda-forge/autoconf-feedstock
+[submodule "m4"]
+	path = m4
+	url = git@github.com:conda-forge/m4-feedstock
