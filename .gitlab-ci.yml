@@ -1,9 +1,15 @@
 before_script:
   # update the CI runner package that determines build orders and such
+  - git submodule init
+  - git submodule update
   - echo "Updating CI tool"
-  - conda install -qy -c msarahan conda-gitlab-ci
-  - conda update -qy -c msarahan conda-gitlab-ci
-  
+  - pushd ~/code/conda-gitlab-ci
+  - python setup.py develop
+  - popd
+  #- conda install -qy -c msarahan conda-gitlab-ci
+  #- conda update -qy -c msarahan conda-gitlab-ci
+  - cgci --version
+
 # the first pass examines the difference in the repo from the given two commits
 determine_builds:
   script:
@@ -13,6 +19,8 @@ determine_builds:
 #    that it is called with changes, and those calls are done with the
 #    determine_builds target.
 build_recipe:
+  only:
+    - triggers
   script:
     # Replace this with a script.  gitlab does not recognize multliline input.
     # https://gitlab.com/gitlab-org/gitlab-ci-multi-runner/issues/166

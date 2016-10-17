@@ -19,3 +19,6 @@
 [submodule "m4"]
 	path = m4
 	url = git@github.com:conda-forge/m4-feedstock
+[submodule "python-3.5"]
+	path = python
+	url = git@github.com:conda-forge/python-feedstock
