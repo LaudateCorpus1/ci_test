@@ -12,17 +12,54 @@ before_script:
 
 # the first pass examines the difference in the repo from the given two commits
 determine_builds:
+  except:
+    - triggers
   script:
     - cgci .
 
 # this CI script is called once by each worker (by label) for each recipe.  The variables
 #    that it is called with changes, and those calls are done with the
 #    determine_builds target.
-build_recipe:
+
+# This bit is running on labeled workers only.  They need to have conda-build, but may or may not have cgci
+build_centos5_64:
+  tags:
+    - centos5-64
   only:
     - triggers
   script:
     # Replace this with a script.  gitlab does not recognize multliline input.
     # https://gitlab.com/gitlab-org/gitlab-ci-multi-runner/issues/166
-    - if [ -n "$BUILD_RECIPE" ]; then conda build --token $ANACONDA_TOKEN $TEST_MODE $BUILD_RECIPE -c conda_gitlab; fi
-        # copy built package to desired output repo
+    - echo $TARGET_PLATFORMS
+    - echo $CI_RUNNER_TAGS
+    - if [ -z "${TARGET_PLATFORMS##*$CI_RUNNER_TAGS*}" ]; then conda build --token $ANACONDA_TOKEN $TEST_MODE $BUILD_RECIPE -c conda_gitlab; fi
+    # TODO: copy built package to desired output repo (currently only doing anaconda upload with conda-build)
+
+
+# This bit is running on labeled workers only.  They need to have conda-build, but may or may not have cgci
+build_win64:
+  tags:
+    - win-64
+  only:
+    - triggers
+  script:
+    # Replace this with a script.  gitlab does not recognize multliline input.
+    # https://gitlab.com/gitlab-org/gitlab-ci-multi-runner/issues/166
+    - echo %TARGET_PLATFORMS%
+    - echo %CI_RUNNER_TAGS%
+    - if "x!TARGET_PLATFORMS:%CI_RUNNER_TAGS%!" != "x%TARGET_PLATFORMS%" conda build --token $ANACONDA_TOKEN $TEST_MODE $BUILD_RECIPE -c conda_gitlab
+    # TODO: copy built package to desired output repo (currently only doing anaconda upload with conda-build)
+
+# This bit is running on labeled workers only.  They need to have conda-build, but may or may not have cgci
+build_osx109:
+  tags:
+    - osx-109
+  only:
+    - triggers
+  script:
+    # Replace this with a script.  gitlab does not recognize multliline input.
+    # https://gitlab.com/gitlab-org/gitlab-ci-multi-runner/issues/166
+    - echo $TARGET_PLATFORMS
+    - echo $CI_RUNNER_TAGS
+    - if [ -z "${TARGET_PLATFORMS##*$CI_RUNNER_TAGS*}" ]; then conda build --token $ANACONDA_TOKEN $TEST_MODE $BUILD_RECIPE -c conda_gitlab; fi
+    # TODO: copy built package to desired output repo (currently only doing anaconda upload with conda-build)
