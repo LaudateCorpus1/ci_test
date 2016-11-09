@@ -1,0 +1,5 @@
+CONDA_LUA: ['5.2']
+CONDA_NPY: ['1.11']
+CONDA_PERL: ['5.20']
+CONDA_PY: ['2.7', '3.5']
+CONDA_R: ['3.3']

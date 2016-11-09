@@ -1,0 +1,51 @@
+
+resource_types:
+- name: concourse-pipeline
+  type: docker-image
+  source:
+    repository: robdimsdale/concourse-pipeline-resource
+    tag: latest-final
+- name: s3-simple
+  type: docker-image
+  source: {repository: 18fgsa/s3-resource-simple}
+
+resources:
+- name: recipe-repo-checkout
+  type: git
+  source:
+    uri: {{recipe-repo}}
+    branch: {{recipe-repo-commit}}
+- name: s3-tasks-archive
+  type: s3
+  trigger: true
+  source:
+    bucket: {{aws-bucket}}
+    access_key_id: {{aws-key-id}}
+    secret_access_key: {{aws-secret-key}}
+    regexp: ci-tasks-(.*).tar.bz2
+
+jobs:
+- name: execute
+  plan:
+  - {get: recipe-repo-checkout}
+  - {get: s3-tasks-archive, trigger: 'true'}
+  - config:
+      image_resource:
+        source: {repository: msarahan/conda-concourse-ci}
+        type: docker-image
+      inputs: [s3-tasks-archive]
+      outputs: [ci-tasks]
+      platform: linux
+      run:
+        args: [-jxvf, s3-tasks-archive]
+        path: tar
+    task: extract_task_archive
+  - aggregate:
+    - {file: s3-tasks/ci-tasks/build-bzip2-3-osx-109.yml, task: build-bzip2-3-osx-109}
+    - {file: s3-tasks/ci-tasks/build-bzip2-vc9_3-win-64.yml, task: build-bzip2-vc9_3-win-64}
+    - {file: s3-tasks/ci-tasks/build-bzip2-3-centos5-64.yml, task: build-bzip2-3-centos5-64}
+  - aggregate:
+    - {file: s3-tasks/ci-tasks/test-bzip2-3-osx-109.yml, task: test-bzip2-3-osx-109}
+    - {file: s3-tasks/ci-tasks/test-bzip2-vc9_3-win-64.yml, task: test-bzip2-vc9_3-win-64}
+    - {file: s3-tasks/ci-tasks/test-bzip2-3-centos5-64.yml, task: test-bzip2-3-centos5-64}
+  public: true

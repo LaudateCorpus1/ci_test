@@ -1,0 +1,115 @@
+resource_types:
+- name: concourse-pipeline
+  type: docker-image
+  source:
+    repository: robdimsdale/concourse-pipeline-resource
+    tag: latest-final
+- name: s3-simple
+  type: docker-image
+  source:
+    repository: 18fgsa/s3-resource-simple
+
+resources:
+- name: recipe-repo-source
+  type: git
+  source:
+    branch: {{recipe-repo-commit}}
+    uri: {{recipe-repo}}
+
+- name: version
+  type: semver
+  source:
+    bucket: {{aws-bucket}}
+    key: version
+    secret_access_key: {{aws-secret-key}}
+    access_key_id: {{aws-key-id}}
+    region_name: {{aws-region-name}}
+    initial_version: 1.0.0
+
+- name: s3-tasks-archive
+  type: s3
+  source:
+    bucket: {{aws-bucket}}
+    access_key_id: {{aws-key-id}}
+    secret_access_key: {{aws-secret-key}}
+    region_name: {{aws-region-name}}
+    regexp: ci-tasks/ci-tasks-(.*).tar.bz2
+
+# this is a folder of all of our initial configuration.  No pushing here.
+- name: s3-config-base
+  type: s3-simple
+  trigger: true
+  source:
+    bucket: {{aws-bucket}}
+    secret_access_key: {{aws-secret-key}}
+    access_key_id: {{aws-key-id}}
+    region_name: {{aws-region-name}}
+    options: [--exclude '*', --include 'config*']
+
+- name: set-execute-pipelines
+  type: concourse-pipeline
+  source:
+    target: {{concourse-url}}
+    teams:
+    - name: {{concourse-team}}
+      username: {{concourse-user}}
+      password: {{concourse-password}}
+
+
+jobs:
+- name: collect-tasks
+  public: True
+  plan:
+  # this copies local config up to the server, to be used by subsequent steps
+  - get: recipe-repo-source
+  - get: s3-config-base
+  - get: version
+    params:
+      bump: patch
+
+  - task: install-run-c3i
+    config:
+      # seems redundant, but you need this in order to have the repo source code folder show up
+      inputs:
+        - name: recipe-repo-source
+        - name: s3-config-base
+        - name: version
+      outputs:
+        - name: ci-tasks
+        - name: config-out
+      image_resource:
+        type: docker-image
+        source:
+          repository: msarahan/conda-concourse-ci
+      platform: linux
+      run:
+        path: c3i
+        args: [examine, recipe-repo-source, --matrix-base-dir, s3-config-base/config]
+  - task: ls_folders
+    config:
+      inputs:
+        - name: ci-tasks
+        - name: config-out
+      image_resource:
+        type: docker-image
+        source:
+          repository: msarahan/conda-concourse-ci
+      platform: linux
+      run:
+        path: ls
+        args: [-lR]
+  - put: set-execute-pipelines
+    params:
+      pipelines:
+      - name: execute
+        team: {{concourse-team}}
+        config_file: ci-tasks/plan.yml
+        # this is an overwritten, edited config file.  We don't push it up, just use it here.
+        vars_files: [config-out/config.yml]
+  - put: version
+    params:
+      file: version/version
+  # this should trigger the execute pipeline
+  - put: s3-tasks-archive
+    params:
+      file: ci-tasks/ci-tasks*.tar.bz2
