@@ -4,17 +4,23 @@ resource_types:
   source:
     repository: robdimsdale/concourse-pipeline-resource
     tag: latest-final
+# used to download arbitrary user configuration (credentials, platforms, and versions.yml)
 - name: s3-simple
   type: docker-image
   source:
     repository: 18fgsa/s3-resource-simple
+# used to check for PRs and update status at Github
+- name: pull-request
+  type: docker-image
+  source:
+    repository: jtarchie/pr
 
 resources:
 - name: recipe-repo-source
-  type: git
+  type: pull-request
   source:
-    branch: {{recipe-repo-commit}}
-    uri: {{recipe-repo}}
+    repo: {{recipe-repo}}
+    access_token: {{recipe-repo-access-token}}
 
 - name: version
   type: semver
@@ -26,14 +32,15 @@ resources:
     region_name: {{aws-region-name}}
     initial_version: 1.0.0
 
-- name: s3-tasks-archive
+- name: s3-archive
   type: s3
   source:
     bucket: {{aws-bucket}}
     access_key_id: {{aws-key-id}}
     secret_access_key: {{aws-secret-key}}
     region_name: {{aws-region-name}}
-    regexp: ci-tasks/ci-tasks-(.*).tar.bz2
+    # this is the output folder on aws, not the local location.
+    regexp: tasks-and-recipes-(.*).tar.bz2
 
 # this is a folder of all of our initial configuration.  No pushing here.
 - name: s3-config-base
@@ -60,8 +67,14 @@ jobs:
 - name: collect-tasks
   public: True
   plan:
-  # this copies local config up to the server, to be used by subsequent steps
+  # pull down any PR submitted
   - get: recipe-repo-source
+    trigger: true
+  # update status for that PR
+  - put: recipe-repo-source
+    params:
+      path: recipe-repo-source
+      status: pending
   - get: s3-config-base
   - get: version
     params:
@@ -75,7 +88,7 @@ jobs:
         - name: s3-config-base
         - name: version
       outputs:
-        - name: ci-tasks
+        - name: output
         - name: config-out
       image_resource:
         type: docker-image
@@ -88,7 +101,7 @@ jobs:
   - task: ls_folders
     config:
       inputs:
-        - name: ci-tasks
+        - name: output
         - name: config-out
       image_resource:
         type: docker-image
@@ -103,13 +116,14 @@ jobs:
       pipelines:
       - name: execute
         team: {{concourse-team}}
-        config_file: ci-tasks/plan.yml
+        config_file: output/plan.yml
         # this is an overwritten, edited config file.  We don't push it up, just use it here.
         vars_files: [config-out/config.yml]
   - put: version
     params:
       file: version/version
   # this should trigger the execute pipeline
-  - put: s3-tasks-archive
+  - put: s3-archive
     params:
-      file: ci-tasks/ci-tasks*.tar.bz2
+      # this is the relative location on local disk
+      file: output/tasks-and-recipes-*.tar.bz2
