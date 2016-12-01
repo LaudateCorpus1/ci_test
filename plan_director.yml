@@ -1,9 +1,4 @@
 resource_types:
-- name: concourse-pipeline
-  type: docker-image
-  source:
-    repository: robdimsdale/concourse-pipeline-resource
-    tag: latest-final
 # used to download arbitrary user configuration (credentials, platforms, and versions.yml)
 - name: s3-simple
   type: docker-image
@@ -16,17 +11,23 @@ resource_types:
     repository: jtarchie/pr
 
 resources:
+# - name: recipe-repo-source
+#   type: pull-request
+#   source:
+#     repo: {{recipe-repo}}
+#     access_token: {{recipe-repo-access-token}}
+
 - name: recipe-repo-source
-  type: pull-request
+  type: git
   source:
-    repo: {{recipe-repo}}
-    access_token: {{recipe-repo-access-token}}
+    url: {{recipe-repo}}
+
 
 - name: version
   type: semver
   source:
     bucket: {{aws-bucket}}
-    key: version
+    key: {{version-file}}
     secret_access_key: {{aws-secret-key}}
     access_key_id: {{aws-key-id}}
     region_name: {{aws-region-name}}
@@ -40,7 +41,7 @@ resources:
     secret_access_key: {{aws-secret-key}}
     region_name: {{aws-region-name}}
     # this is the output folder on aws, not the local location.
-    regexp: tasks-and-recipes-(.*).tar.bz2
+    regexp: {{tarball-regex}}
 
 # this is a folder of all of our initial configuration.  No pushing here.
 - name: s3-config-base
@@ -51,17 +52,7 @@ resources:
     secret_access_key: {{aws-secret-key}}
     access_key_id: {{aws-key-id}}
     region_name: {{aws-region-name}}
-    options: [--exclude '*', --include 'config*']
-
-- name: set-execute-pipelines
-  type: concourse-pipeline
-  source:
-    target: {{concourse-url}}
-    teams:
-    - name: {{concourse-team}}
-      username: {{concourse-user}}
-      password: {{concourse-password}}
-
+    options: [--exclude '*', --include {{config-folder-star}}]
 
 jobs:
 - name: collect-tasks
@@ -70,11 +61,12 @@ jobs:
   # pull down any PR submitted
   - get: recipe-repo-source
     trigger: true
+    submodules: all
   # update status for that PR
-  - put: recipe-repo-source
-    params:
-      path: recipe-repo-source
-      status: pending
+  # - put: recipe-repo-source
+  #   params:
+  #     path: recipe-repo-source
+  #     status: pending
   - get: s3-config-base
   - get: version
     params:
@@ -89,7 +81,6 @@ jobs:
         - name: version
       outputs:
         - name: output
-        - name: config-out
       image_resource:
         type: docker-image
         source:
@@ -97,28 +88,7 @@ jobs:
       platform: linux
       run:
         path: c3i
-        args: [examine, recipe-repo-source, --matrix-base-dir, s3-config-base/config]
-  - task: ls_folders
-    config:
-      inputs:
-        - name: output
-        - name: config-out
-      image_resource:
-        type: docker-image
-        source:
-          repository: msarahan/conda-concourse-ci
-      platform: linux
-      run:
-        path: ls
-        args: [-lR]
-  - put: set-execute-pipelines
-    params:
-      pipelines:
-      - name: execute
-        team: {{concourse-team}}
-        config_file: output/plan.yml
-        # this is an overwritten, edited config file.  We don't push it up, just use it here.
-        vars_files: [config-out/config.yml]
+        args: [examine, recipe-repo-source, {{base-name}}, --matrix-base-dir, s3-config-base/{{config-folder}}]
   - put: version
     params:
       file: version/version
@@ -126,4 +96,33 @@ jobs:
   - put: s3-archive
     params:
       # this is the relative location on local disk
-      file: output/tasks-and-recipes-*.tar.bz2
+      file: {{tarball-glob}}
+  - put: recipe-repo-source
+    params:
+      path: recipe-repo-source
+      status: pending
+  - task: set-execute-pipeline
+    config:
+      inputs:
+        - name: s3-config-base
+        - name: output
+        - name: recipe-repo-source
+        - name: version
+      image_resource:
+        type: docker-image
+        source:
+          repository: msarahan/conda-concourse-ci
+      platform: linux
+      run:
+        path: c3i
+        # TODO: need to determine what private/public status is, and set child accordingly
+        args:
+          - submit
+          - {{base-name}}
+          - --pipeline-file
+          - output/plan.yml
+          - --pipeline-name
+          # these template variables are filled in by the c3i program, NOT concourse.
+          - "{base_name}-execute-{git_identifier}"
+          - --src-dir
+          - recipe-repo-source
