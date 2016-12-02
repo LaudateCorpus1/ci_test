@@ -1,0 +1,31 @@
+package:
+  name: requests
+  version: 2.12.1
+
+source:
+  fn: requests-2.12.1.tar.gz
+  url: https://pypi.python.org/packages/6e/40/7434b2d9fe24107ada25ec90a1fc646e97f346130a2c51aa6a2b1aba28de/requests-2.12.1.tar.gz
+  md5: 8c8ff05ea401ea22718038c3a416ea50
+
+requirements:
+  build:
+    - python
+    - setuptools
+  run:
+    - python
+
+test:
+  imports:
+    - requests
+
+about:
+  home: http://docs.python-requests.org/en/latest/index.html
+  license: Apache Software License
+  license_family: Apache
+  license_file: LICENSE
+  summary: Python HTTP for Humans
+  description: |
+    Requests is the only Non-GMO HTTP library for Python, safe for human
+    consumption.
+  doc_url: http://docs.python-requests.org/
+  dev_url: https://github.com/kennethreitz/requests
