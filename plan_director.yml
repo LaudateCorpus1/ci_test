@@ -9,7 +9,7 @@ resource_types:
 - name: rsync-resource
   type: docker-image
   source:
-      repository: mrsixw/concourse-rsync-resource
+      repository: msarahan/concourse-rsync-resource
       tag: latest
 
 
@@ -25,15 +25,23 @@ resources:
   source:
     uri: {{recipe-repo}}
 
-- name: rsync-intermediary
+- name: rsync-config
   type: rsync-resource
   source:
     server: {{intermediate-server}}
-    base_dir: {{intermediate-base-folder}}
+    base_dir: {{intermediate-config-folder}}
     user : {{intermediate-user}}
     private_key: {{intermediate-private-key}}
     disable_version_path: true
 
+- name: rsync-recipes
+  type: rsync-resource
+  source:
+    server: {{intermediate-server}}
+    base_dir: {{intermediate-recipe-folder}}
+    user : {{intermediate-user}}
+    private_key: {{intermediate-private-key}}
+    disable_version_path: true
 
 jobs:
 - name: collect-tasks
@@ -48,13 +56,13 @@ jobs:
   #   params:
   #     path: recipe-repo-source
   #     status: pending
-  - get: rsync-intermediary
+  - get: rsync-config
   - task: c3i-examine
     config:
       # seems redundant, but you need this in order to have the repo source code folder show up
       inputs:
         - name: recipe-repo-source
-        - name: rsync-intermediary
+        - name: rsync-config
       outputs:
         - name: output
       image_resource:
@@ -72,11 +80,11 @@ jobs:
           - {{base-name}}
           - .
           - --matrix-base-dir
-          - ../rsync-intermediary/config/
+          - ../rsync-config/
           - --output-dir
           # this is evaluated by c3i, not by concourse.
-          - "../output/builds/{git_identifier}/plan_and_recipes"
-  - put: rsync-intermediary
+          - "../output/{git_identifier}"
+  - put: rsync-recipes
     params:
       sync_dir: "output"
   # - put: recipe-repo-source
@@ -86,7 +94,7 @@ jobs:
   - task: set-execute-pipeline
     config:
       inputs:
-        - name: rsync-intermediary
+        - name: rsync-config
         - name: recipe-repo-source
         - name: output
       image_resource:
@@ -101,12 +109,11 @@ jobs:
           - submit
           - {{base-name}}
           - --pipeline-file
-          - "output/builds/{git_identifier}/plan_and_recipes/plan.yml"
+          - "output/{git_identifier}/plan.yml"
           - --pipeline-name
           # these template variables are filled in by the c3i program, NOT concourse.
           - "{base_name}-execute-{git_identifier}"
           - --src-dir
           - recipe-repo-source
           - --config-root-dir
-          # we omit the config name here because that's already captured in rsync-intermediary
-          - rsync-intermediary/config/
+          - rsync-config/
